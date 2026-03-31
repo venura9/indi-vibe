@@ -25,6 +25,7 @@
         "ms-python.vscode-pylance",
         "GitHub.copilot",
         "GitHub.copilot-chat",
+        "ms-azuretools.vscode-azure-mcp-server",
         "esbenp.prettier-vscode",
         "dbaeumer.vscode-eslint",
         "ms-vscode.vscode-typescript-next",
