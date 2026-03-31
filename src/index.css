@@ -1,0 +1,19 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: #0a0a0f;
+  color: #e8e8e8;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
