@@ -1,0 +1,65 @@
+{
+  "name": "Azure Indie Artist Platform",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/azure-cli:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "version": "latest"
+    },
+    "ghcr.io/azure/azure-functions/devcontainer-feature/azure-functions-core-tools:1": {
+      "version": "4"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-azurefunctions",
+        "ms-azuretools.vscode-azurestaticwebapps",
+        "ms-vscode.azure-account",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "GitHub.copilot",
+        "GitHub.copilot-chat",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "ms-vscode.vscode-typescript-next",
+        "bradlc.vscode-tailwindcss"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.formatting.provider": "black",
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.python"
+        },
+        "azureFunctions.deploySubpath": "api",
+        "azureFunctions.projectRuntime": "~4",
+        "azureFunctions.projectLanguage": "Python"
+      }
+    }
+  },
+  "forwardPorts": [
+    3000,
+    7071
+  ],
+  "portsAttributes": {
+    "3000": {
+      "label": "React frontend (Vite)",
+      "onAutoForward": "openBrowser"
+    },
+    "7071": {
+      "label": "Azure Functions local runtime",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "npm install && pip install -r api/requirements.txt",
+  "remoteEnv": {
+    "AZURE_FUNCTIONS_ENVIRONMENT": "Development"
+  }
+}
