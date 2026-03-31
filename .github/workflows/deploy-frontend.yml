@@ -1,0 +1,91 @@
+name: Deploy Frontend to Azure SWA
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.ts'
+      - 'staticwebapp.config.json'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: 'upload'
+          app_location: '/'
+          output_location: 'dist'
+          skip_api_build: true
+
+      - name: Get SWA default hostname
+        id: swa_hostname
+        run: |
+          HOSTNAME=$(az staticwebapp show \
+            --name swa-indie-artist-platform \
+            --resource-group rg-indie-artist-platform \
+            --query "defaultHostname" -o tsv)
+          echo "hostname=$HOSTNAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upsert Cloudflare CNAME for listen.yumethathukorala.com
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          SWA_HOSTNAME: ${{ steps.swa_hostname.outputs.hostname }}
+        run: |
+          # Find existing CNAME record for listen.yumethathukorala.com
+          RECORD_ID=$(curl -s -X GET \
+            "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records?type=CNAME&name=listen.yumethathukorala.com" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            | jq -r '.result[0].id // empty')
+
+          PAYLOAD=$(jq -n \
+            --arg name "listen.yumethathukorala.com" \
+            --arg content "$SWA_HOSTNAME" \
+            '{type:"CNAME",name:$name,content:$content,ttl:1,proxied:false}')
+
+          if [ -n "$RECORD_ID" ]; then
+            echo "Updating existing CNAME record $RECORD_ID"
+            curl -s -X PUT \
+              "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records/${RECORD_ID}" \
+              -H "Authorization: Bearer ${CF_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data "$PAYLOAD"
+          else
+            echo "Creating new CNAME record"
+            curl -s -X POST \
+              "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records" \
+              -H "Authorization: Bearer ${CF_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data "$PAYLOAD"
+          fi
