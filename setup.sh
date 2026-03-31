@@ -1,98 +1,55 @@
 #!/bin/bash
 # =============================================================================
-# Azure Indie Artist Platform — Resource Setup Script
-# Run this in Azure Cloud Shell (bash)
-# https://shell.azure.com
+# Azure Indie Artist Platform — Resume Script
+# Run this in GitHub Codespaces or Azure Cloud Shell
 #
-# Usage:
-#   chmod +x setup.sh
-#   ./setup.sh
-#
-# What it does:
-#   1. Creates all Azure resources for Phase 2a and 2b
-#   2. Captures all values needed for GitHub Actions secrets
-#   3. Prints a summary at the end — copy/paste into GitHub
+# Picks up from where setup.sh left off:
+#   - Resource group       ✅ done
+#   - Storage account      ✅ done
+#   - Function App         ✅ done
+#   - Static Web App       ✅ done (but wrong SKU — will upgrade)
+#   - Link SWA + Function  ❌ failed — fixing now
+#   - Cosmos DB            ❌ not yet done
+#   - Service principal    ❌ not yet done
+#   - Capture secrets      ❌ not yet done
 # =============================================================================
 
 set -e
 
 # -----------------------------------------------------------------------------
-# CONFIG — change these if needed
+# CONFIG
 # -----------------------------------------------------------------------------
-SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+SUBSCRIPTION_ID="aae8ff4c-3790-49b6-8fe0-2e3144a297d2"
 RESOURCE_GROUP="rg-indie-artist-platform"
 LOCATION="australiaeast"
-SWA_LOCATION="eastasia"           # SWA Free tier not available in australiaeast
+SWA_LOCATION="eastasia"
 
 FUNCTIONAPP_NAME="func-indie-artist-platform"
-FUNCTIONAPP_PLAN="plan-indie-artist-platform"
-STORAGE_ACCOUNT="stindieartistpltfrm"  # max 24 chars, lowercase, no hyphens
+STORAGE_ACCOUNT="stindieartistpltfrm"
 SWA_NAME="swa-indie-artist-platform"
 COSMOS_ACCOUNT="cosmos-indie-artist-platform"
 COSMOS_DB="indie-artist-db"
 COSMOS_CONTAINER="smartlinks"
 SP_NAME="sp-indie-artist-platform"
-GITHUB_REPO="venura9/indie-artist-platform"  # update with actual repo name
+GITHUB_REPO="venura9/indie-artist-platform"
 
 echo ""
 echo "============================================="
-echo " Azure Indie Artist Platform — Setup Script"
+echo " Azure Indie Artist Platform — Resume Script"
 echo "============================================="
 echo ""
-echo "Subscription : $SUBSCRIPTION_ID"
-echo "Resource group: $RESOURCE_GROUP"
-echo "Location      : $LOCATION"
-echo ""
 
 # -----------------------------------------------------------------------------
-# RESOURCE GROUP
+# UPGRADE SWA TO STANDARD SKU
+# (required for linked backend / Function App proxy)
 # -----------------------------------------------------------------------------
-echo ">>> Creating resource group..."
-az group create \
-  --name "$RESOURCE_GROUP" \
-  --location "$LOCATION" \
-  --output none
-echo "    Done."
-
-# -----------------------------------------------------------------------------
-# STORAGE ACCOUNT (required by Function App)
-# -----------------------------------------------------------------------------
-echo ">>> Creating storage account..."
-az storage account create \
-  --name "$STORAGE_ACCOUNT" \
-  --resource-group "$RESOURCE_GROUP" \
-  --location "$LOCATION" \
-  --sku Standard_LRS \
-  --output none
-echo "    Done."
-
-# -----------------------------------------------------------------------------
-# FUNCTION APP
-# -----------------------------------------------------------------------------
-echo ">>> Creating Function App (Consumption, Python 3.11)..."
-az functionapp create \
-  --name "$FUNCTIONAPP_NAME" \
-  --resource-group "$RESOURCE_GROUP" \
-  --consumption-plan-location "$LOCATION" \
-  --storage-account "$STORAGE_ACCOUNT" \
-  --runtime python \
-  --runtime-version 3.11 \
-  --os-type linux \
-  --functions-version 4 \
-  --output none
-echo "    Done."
-
-# -----------------------------------------------------------------------------
-# STATIC WEB APP
-# -----------------------------------------------------------------------------
-echo ">>> Creating Static Web App (Free tier)..."
-az staticwebapp create \
+echo ">>> Upgrading Static Web App to Standard SKU..."
+az staticwebapp update \
   --name "$SWA_NAME" \
   --resource-group "$RESOURCE_GROUP" \
-  --location "$SWA_LOCATION" \
-  --sku Free \
+  --sku Standard \
   --output none
-echo "    Done."
+echo "    Done. (~$9 USD/month — disable when not needed)"
 
 # -----------------------------------------------------------------------------
 # LINK FUNCTION APP TO STATIC WEB APP
@@ -112,11 +69,11 @@ az staticwebapp backends link \
 echo "    Done."
 
 # -----------------------------------------------------------------------------
-# COSMOS DB (serverless)
+# COSMOS DB
 # -----------------------------------------------------------------------------
 echo ">>> Creating Cosmos DB account (serverless)..."
-echo "    Note: Free Tier limited to one account per subscription."
-echo "    If this fails, re-run without --enable-free-tier true"
+echo "    Note: --enable-free-tier true limited to one account per subscription."
+echo "    If this fails with Free Tier error, remove that flag and rerun."
 
 az cosmosdb create \
   --name "$COSMOS_ACCOUNT" \
@@ -146,7 +103,7 @@ az cosmosdb sql container create \
 echo "    Done."
 
 # -----------------------------------------------------------------------------
-# SERVICE PRINCIPAL FOR GITHUB ACTIONS
+# SERVICE PRINCIPAL
 # -----------------------------------------------------------------------------
 echo ">>> Creating service principal for GitHub Actions..."
 AZURE_CREDENTIALS=$(az ad sp create-for-rbac \
@@ -245,6 +202,7 @@ $COSMOS_CONTAINER
 =============================================================================
 
 SWA default hostname : $SWA_HOSTNAME
+SWA SKU              : Standard (~$9 USD/month)
 Function App name    : $FUNCTIONAPP_NAME
 Resource group       : $RESOURCE_GROUP
 Subscription ID      : $SUBSCRIPTION_ID
@@ -260,29 +218,48 @@ from the Cloudflare dashboard — they cannot be generated from Azure.
     Cloudflare → yumethathukorala.com → Overview → Zone ID (right sidebar)
 
 =============================================================================
+ Cost reminder
+=============================================================================
+
+Azure Static Web Apps Standard tier costs ~$9 USD/month.
+To avoid charges when not actively developing:
+
+  az staticwebapp update \
+    --name $SWA_NAME \
+    --resource-group $RESOURCE_GROUP \
+    --sku Free
+
+Note: downgrading to Free will unlink the Function App backend.
+Upgrade back to Standard before next deploy:
+
+  az staticwebapp update \
+    --name $SWA_NAME \
+    --resource-group $RESOURCE_GROUP \
+    --sku Standard
+
+=============================================================================
+ Next steps
+=============================================================================
+
+1. Open github-secrets.txt and add each secret to GitHub
+2. Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ZONE_ID manually
+3. Delete github-secrets.txt — do not commit it
+4. Push to main to trigger the first deploy
+5. Visit $SWA_HOSTNAME to confirm the site is live
+6. Then point listen.yumethathukorala.com via Cloudflare CNAME
+
+=============================================================================
 EOF
 
 echo ""
 echo "============================================="
-echo " All resources created successfully."
+echo " All done."
 echo "============================================="
 echo ""
-echo " Secret values saved to: $OUTPUT_FILE"
-echo ""
-echo " SWA hostname : $SWA_HOSTNAME"
-echo " Cosmos endpoint: $COSMOS_ENDPOINT"
+echo " SWA hostname    : $SWA_HOSTNAME"
+echo " Cosmos endpoint : $COSMOS_ENDPOINT"
+echo " Secret values   : $OUTPUT_FILE"
 echo ""
 echo " IMPORTANT: Delete $OUTPUT_FILE after"
 echo " adding secrets to GitHub. Do not commit it."
-echo ""
-echo "============================================="
-echo " Next steps"
-echo "============================================="
-echo ""
-echo " 1. Download $OUTPUT_FILE from Cloud Shell"
-echo "    (Cloud Shell toolbar → Upload/Download → Download)"
-echo " 2. Add each secret to GitHub"
-echo " 3. Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ZONE_ID manually"
-echo " 4. Delete $OUTPUT_FILE"
-echo " 5. Push to main to trigger the first deploy"
 echo ""
