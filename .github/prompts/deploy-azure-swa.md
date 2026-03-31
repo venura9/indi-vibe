@@ -72,12 +72,15 @@ Add these to the new repo under Settings → Secrets and variables → Actions:
 |---|---|
 | `AZURE_CREDENTIALS` | JSON output from `az ad sp create-for-rbac` above |
 | `AZURE_STATIC_WEB_APPS_API_TOKEN` | Azure portal → swa-indie-artist-platform → Deployment → Manage deployment token |
-| `AZURE_FUNCTIONAPP_PUBLISH_PROFILE` | Azure portal → func-indie-artist-platform → Overview → Get publish profile |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → My Profile → API Tokens → Create Token → Edit zone DNS template |
 | `CLOUDFLARE_ZONE_ID` | Cloudflare dashboard → yumethathukorala.com → Overview → Zone ID |
- 
+
 Note: Do NOT add GH_TOKEN — use secrets.GITHUB_TOKEN which is available
 automatically in all GitHub Actions workflows.
+
+Note: `AZURE_FUNCTIONAPP_PUBLISH_PROFILE` is NOT used. Function App deploys via
+`az functionapp deployment source config-zip` using `AZURE_CREDENTIALS`.
+Publish profiles are not good practice — they are long-lived, unscoped, and not auditable.
  
 ---
  
@@ -219,11 +222,17 @@ Social links:
    b. .github/workflows/deploy-api.yml
       - Trigger: push to main, paths: ['api/**']
       - Steps:
-          i.  Azure login using AZURE_CREDENTIALS secret
-          ii. pip install -r api/requirements.txt
-          iii.Deploy to func-indie-artist-platform
-              using azure/functions-action@v1
-              with AZURE_FUNCTIONAPP_PUBLISH_PROFILE
+          i.   Azure login using AZURE_CREDENTIALS secret
+          ii.  pip install -r api/requirements.txt \
+                 --target api/.python_packages/lib/site-packages
+          iii. Zip the api/ directory and deploy via:
+               az functionapp deployment source config-zip \
+                 --name func-indie-artist-platform \
+                 --resource-group rg-indie-artist-platform \
+                 --src api.zip
+      - Do NOT use azure/functions-action@v1 with a publish profile.
+        AZURE_FUNCTIONAPP_PUBLISH_PROFILE is not used — it is long-lived,
+        unscoped, and not auditable.
  
    Both workflows use secrets.GITHUB_TOKEN where needed —
    do not add GH_TOKEN as a separate secret, it is not required.
@@ -231,7 +240,6 @@ Social links:
 6. Required GitHub Actions secrets (all new — fresh repo):
    - AZURE_CREDENTIALS
    - AZURE_STATIC_WEB_APPS_API_TOKEN
-   - AZURE_FUNCTIONAPP_PUBLISH_PROFILE
    - CLOUDFLARE_API_TOKEN
    - CLOUDFLARE_ZONE_ID
  
