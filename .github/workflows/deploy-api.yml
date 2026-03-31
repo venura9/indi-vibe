@@ -34,4 +34,3 @@ jobs:
         with:
           app-name: func-indie-artist-platform
           package: api
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
